@@ -50,6 +50,40 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
 
   const persona = message.personaId ? PERSONA_MAP[message.personaId] : null
 
+  // 회의 요약 메시지 특별 렌더링
+  if (message.isSummary) {
+    return (
+      <div className="animate-slide-up">
+        <div className="rounded-2xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 shadow-md overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-amber-400 dark:bg-amber-500">
+            <div className="flex items-center gap-2">
+              <span className="text-white font-black text-base">📋</span>
+              <span className="text-white font-bold text-sm">회의 요약</span>
+            </div>
+            <span className="text-amber-100 text-xs">{formatTime(message.timestamp)}</span>
+          </div>
+          <div className="px-5 py-4">
+            {message.isStreaming && message.content === '' ? (
+              <div className="flex gap-1 py-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            ) : (
+              <div
+                className="text-sm leading-relaxed text-gray-800 dark:text-gray-100"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(message.content) }}
+              />
+            )}
+            {message.isStreaming && message.content !== '' && (
+              <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse align-text-bottom bg-amber-400" />
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex gap-3 animate-slide-up">
       {/* Persona icon */}

@@ -29,6 +29,7 @@ export interface Message {
   personaName?: string
   timestamp: number
   isStreaming?: boolean
+  isSummary?: boolean
 }
 
 export interface ChatSession {

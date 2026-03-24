@@ -37,7 +37,16 @@ export default function MeetingMinutes({ messages, onClose }: MeetingMinutesProp
 
     md += `## 전체 대화록\n\n`
 
+    // 요약 메시지 먼저 찾아서 맨 위에 배치
+    const summaryMsg = messages.find((m) => m.isSummary)
+    if (summaryMsg) {
+      md += `## 📋 회의 요약\n\n${summaryMsg.content}\n\n---\n\n`
+    }
+
+    md += `## 전체 대화록\n\n`
+
     for (const msg of messages) {
+      if (msg.isSummary) continue // 요약은 위에서 이미 출력
       if (msg.role === 'user') {
         md += `### 🙋 민철\n\n${msg.content}\n\n`
       } else {
@@ -107,6 +116,20 @@ export default function MeetingMinutes({ messages, onClose }: MeetingMinutesProp
           ) : (
             messages.map((msg) => {
               const persona = msg.personaId ? PERSONA_MAP[msg.personaId] : null
+
+              if (msg.isSummary) {
+                return (
+                  <div key={msg.id} className="text-sm rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 overflow-hidden">
+                    <div className="px-3 py-1.5 bg-amber-400 dark:bg-amber-500">
+                      <span className="text-white font-bold text-xs">📋 회의 요약</span>
+                    </div>
+                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap line-clamp-6 px-3 py-2">
+                      {msg.content}
+                    </p>
+                  </div>
+                )
+              }
+
               return (
                 <div key={msg.id} className="text-sm">
                   <div className="flex items-center gap-2 mb-1">

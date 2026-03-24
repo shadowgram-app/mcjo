@@ -90,6 +90,7 @@ export default function Boardroom() {
   const [showMinutes, setShowMinutes] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
   const [quickActionPrompt, setQuickActionPrompt] = useState('')
+  const [meetingMode, setMeetingMode] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // 히스토리 로드
@@ -115,7 +116,18 @@ export default function Boardroom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function toggleMeetingMode() {
+    setMeetingMode((prev) => {
+      if (!prev) {
+        // 회의 모드 켤 때 전체 선택
+        setSelectedPersonas(new Set(PERSONAS.map((p) => p.id as PersonaId)))
+      }
+      return !prev
+    })
+  }
+
   function togglePersona(id: string) {
+    if (meetingMode) return // 회의 모드 중엔 개별 선택 불가
     setSelectedPersonas((prev) => {
       const next = new Set(prev)
       if (next.has(id as PersonaId)) {
@@ -229,6 +241,92 @@ export default function Boardroom() {
     []
   )
 
+  /** 회의 모드: 8명 발언 후 자동 요약 생성 */
+  const streamMeetingSummary = useCallback(
+    async (
+      question: string,
+      roundResponses: Array<{ name: string; role: string; content: string }>
+    ): Promise<void> => {
+      const msgId = generateId()
+
+      const summaryContext = `[회의 주제]\n${question}\n\n[페르소나 발언]\n\n${roundResponses
+        .map((r) => `### ${r.name} (${r.role})\n${r.content}`)
+        .join('\n\n')}\n\n---\n위 발언들을 바탕으로 구조화된 회의 요약을 작성해주세요.`
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: 'assistant' as const,
+          content: '',
+          personaName: '회의 요약',
+          timestamp: Date.now(),
+          isStreaming: true,
+          isSummary: true,
+        },
+      ])
+
+      let accumulated = ''
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: summaryContext }],
+            personaId: 'summary',
+          }),
+        })
+
+        if (!res.ok || !res.body) throw new Error(`Summary API error: ${res.status}`)
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() ?? ''
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const data = line.slice(6).trim()
+            if (data === '[DONE]') break
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.text) {
+                accumulated += parsed.text
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === msgId ? { ...m, content: accumulated } : m))
+                )
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[summary] stream error:', err)
+        accumulated = '⚠️ 요약 생성 오류가 발생했습니다.'
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId ? { ...m, content: accumulated, isStreaming: false } : m
+          )
+        )
+        return
+      } finally {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, isStreaming: false } : m))
+        )
+      }
+    },
+    []
+  )
+
   const handleSend = useCallback(
     async (text: string) => {
       if (isLoading) return
@@ -258,9 +356,10 @@ export default function Boardroom() {
         { role: 'user', content: text },
       ]
 
-      const personasToQuery = PERSONAS.filter((p) =>
-        selectedPersonas.has(p.id as PersonaId)
-      )
+      // 회의 모드: 전체 8명 강제 사용
+      const personasToQuery = meetingMode
+        ? PERSONAS
+        : PERSONAS.filter((p) => selectedPersonas.has(p.id as PersonaId))
 
       // 3. 이번 라운드 누적 응답 (회의 모드: 순서대로 앞선 발언 컨텍스트 제공)
       const roundResponses: Array<{
@@ -287,6 +386,10 @@ export default function Boardroom() {
             })
           }
         }
+        // 회의 모드: 모든 페르소나 응답 후 자동 요약 생성
+        if (meetingMode && roundResponses.length > 0) {
+          await streamMeetingSummary(text, roundResponses)
+        }
       } finally {
         setIsLoading(false)
         // 4. 모든 응답 완료 후 localStorage 최종 저장
@@ -296,7 +399,7 @@ export default function Boardroom() {
         })
       }
     },
-    [isLoading, messages, selectedPersonas, streamPersonaResponse]
+    [isLoading, meetingMode, messages, selectedPersonas, streamPersonaResponse, streamMeetingSummary]
   )
 
   function clearHistory() {
@@ -329,6 +432,19 @@ export default function Boardroom() {
 
           <div className="flex items-center gap-2">
             <DayCounter />
+
+            <button
+              onClick={toggleMeetingMode}
+              disabled={isLoading}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
+                meetingMode
+                  ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
+              }`}
+              title={meetingMode ? '회의 모드 끄기' : '회의 모드: 8명 전원 순서대로 응답 후 자동 요약'}
+            >
+              {meetingMode ? '🔴 회의 중' : '🏛️ 회의 모드'}
+            </button>
 
             <button
               onClick={() => setShowMinutes(true)}
@@ -391,7 +507,9 @@ export default function Boardroom() {
             </div>
           </div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            {selectedPersonas.size === PERSONAS.length
+            {meetingMode
+              ? '🏛️ 회의 모드 — 8명 전원 순서대로 응답 후 회의 요약이 자동 생성됩니다'
+              : selectedPersonas.size === PERSONAS.length
               ? '전체 8명 참여 중 — 순서대로 응답하며 앞선 발언을 컨텍스트로 활용합니다'
               : `${selectedPersonas.size}명 선택됨 — 선택된 페르소나만 응답합니다`}
           </p>
