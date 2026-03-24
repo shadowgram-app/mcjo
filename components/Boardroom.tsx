@@ -11,6 +11,8 @@ import DayCounter from './DayCounter'
 import type { Message, PersonaId } from '@/types'
 
 const STORAGE_KEY = 'shadowgram-boardroom-history'
+// API에 전달할 최대 히스토리 턴 수 (user+assistant 쌍)
+const MAX_API_TURNS = 20
 
 function generateId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -28,12 +30,54 @@ function loadHistory(): Message[] {
 
 function saveHistory(messages: Message[]) {
   try {
-    // Keep last 100 messages
-    const toSave = messages.slice(-100)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
   } catch {
     // ignore storage errors
   }
+}
+
+/** messages 배열을 Claude API 형식으로 변환 (최근 N턴, streaming 제외) */
+function toApiMessages(
+  messages: Message[],
+  maxTurns = MAX_API_TURNS
+): Array<{ role: string; content: string }> {
+  const finished = messages.filter((m) => !m.isStreaming && m.content.trim())
+  // 최근 maxTurns * 2 개 메시지만 (user+assistant 쌍)
+  const sliced = finished.slice(-(maxTurns * 2))
+
+  // Claude API는 user로 시작해야 함 — 첫 메시지가 assistant이면 제거
+  const adjusted = [...sliced]
+  while (adjusted.length > 0 && adjusted[0].role === 'assistant') {
+    adjusted.shift()
+  }
+
+  return adjusted.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }))
+}
+
+/** 이번 라운드에서 앞서 응답한 페르소나들의 발언을 user 메시지 끝에 주입 */
+function injectRoundContext(
+  baseMessages: Array<{ role: string; content: string }>,
+  prevResponses: Array<{ name: string; role: string; content: string }>
+): Array<{ role: string; content: string }> {
+  if (prevResponses.length === 0) return baseMessages
+
+  const contextBlock = prevResponses
+    .map((r) => `[${r.name} — ${r.role}]\n${r.content}`)
+    .join('\n\n')
+
+  const last = baseMessages[baseMessages.length - 1]
+  const rest = baseMessages.slice(0, -1)
+
+  return [
+    ...rest,
+    {
+      role: last.role,
+      content: `${last.content}\n\n---\n[이 라운드 앞선 발언들 — 참고하여 자신의 관점으로 응답하세요]\n\n${contextBlock}`,
+    },
+  ]
 }
 
 export default function Boardroom() {
@@ -48,12 +92,12 @@ export default function Boardroom() {
   const [quickActionPrompt, setQuickActionPrompt] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Load history
+  // 히스토리 로드
   useEffect(() => {
     setMessages(loadHistory())
   }, [])
 
-  // Dark mode from system preference
+  // 시스템 다크모드 감지
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     setDarkMode(mq.matches)
@@ -63,14 +107,10 @@ export default function Boardroom() {
   }, [])
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
+    document.documentElement.classList.toggle('dark', darkMode)
   }, [darkMode])
 
-  // Auto scroll
+  // 자동 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -79,7 +119,6 @@ export default function Boardroom() {
     setSelectedPersonas((prev) => {
       const next = new Set(prev)
       if (next.has(id as PersonaId)) {
-        // Don't deselect if it's the last one
         if (next.size <= 1) return prev
         next.delete(id as PersonaId)
       } else {
@@ -94,41 +133,43 @@ export default function Boardroom() {
   }
 
   function deselectAllPersonas() {
-    // Keep first one selected
     setSelectedPersonas(new Set([PERSONAS[0].id as PersonaId]))
   }
 
+  /**
+   * 단일 페르소나 스트리밍 응답.
+   * 완료된 최종 content 문자열을 반환한다.
+   */
   const streamPersonaResponse = useCallback(
-    async (userMessages: Array<{ role: string; content: string }>, personaId: PersonaId) => {
+    async (
+      apiMessages: Array<{ role: string; content: string }>,
+      personaId: PersonaId
+    ): Promise<string> => {
       const msgId = generateId()
+      const persona = PERSONAS.find((p) => p.id === personaId)!
 
-      // Add empty streaming message
-      setMessages((prev) => {
-        const updated = [
-          ...prev,
-          {
-            id: msgId,
-            role: 'assistant' as const,
-            content: '',
-            personaId,
-            personaName: PERSONAS.find((p) => p.id === personaId)?.name,
-            timestamp: Date.now(),
-            isStreaming: true,
-          },
-        ]
-        return updated
-      })
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: msgId,
+          role: 'assistant' as const,
+          content: '',
+          personaId,
+          personaName: persona.name,
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ])
 
       setActivePersonaId(personaId)
+
+      let accumulated = ''
 
       try {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: userMessages,
-            personaId,
-          }),
+          body: JSON.stringify({ messages: apiMessages, personaId }),
         })
 
         if (!res.ok || !res.body) {
@@ -148,41 +189,42 @@ export default function Boardroom() {
           buffer = lines.pop() ?? ''
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6).trim()
-              if (data === '[DONE]') break
-              try {
-                const parsed = JSON.parse(data)
-                if (parsed.text) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === msgId
-                        ? { ...m, content: m.content + parsed.text }
-                        : m
-                    )
+            if (!line.startsWith('data: ')) continue
+            const data = line.slice(6).trim()
+            if (data === '[DONE]') break
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.text) {
+                accumulated += parsed.text
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === msgId ? { ...m, content: accumulated } : m
                   )
-                }
-              } catch {
-                // ignore parse errors
+                )
               }
+            } catch {
+              // ignore parse errors
             }
           }
         }
       } catch (err) {
-        console.error('Stream error:', err)
+        console.error(`[${personaId}] stream error:`, err)
+        const errMsg = '⚠️ 응답 오류가 발생했습니다.'
+        accumulated = errMsg
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === msgId
-              ? { ...m, content: '⚠️ 응답 오류가 발생했습니다.', isStreaming: false }
-              : m
+            m.id === msgId ? { ...m, content: errMsg, isStreaming: false } : m
           )
         )
+        return accumulated
       } finally {
         setMessages((prev) =>
           prev.map((m) => (m.id === msgId ? { ...m, isStreaming: false } : m))
         )
         setActivePersonaId(null)
       }
+
+      return accumulated
     },
     []
   )
@@ -191,6 +233,7 @@ export default function Boardroom() {
     async (text: string) => {
       if (isLoading) return
 
+      // 1. 사용자 메시지 즉시 추가
       const userMsg: Message = {
         id: generateId(),
         role: 'user',
@@ -198,35 +241,55 @@ export default function Boardroom() {
         timestamp: Date.now(),
       }
 
+      // 최신 messages snapshot을 ref로 참조
+      let latestMessages: Message[] = []
       setMessages((prev) => {
-        const updated = [...prev, userMsg]
-        saveHistory(updated)
-        return updated
+        latestMessages = [...prev, userMsg]
+        saveHistory(latestMessages)
+        return latestMessages
       })
 
       setIsLoading(true)
 
-      // Build conversation history for API (max 20 turns = 40 messages)
-      const historyForApi = messages
-        .slice(-39)
-        .filter((m) => !m.isStreaming)
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-        }))
-      historyForApi.push({ role: 'user', content: text })
+      // 2. 기본 API 히스토리 구성 (사용자 메시지 포함, 전체 히스토리 기반)
+      // 직전 state에서 읽으므로 userMsg 추가 전 messages 사용
+      const baseApiMessages = [
+        ...toApiMessages(messages),
+        { role: 'user', content: text },
+      ]
 
       const personasToQuery = PERSONAS.filter((p) =>
         selectedPersonas.has(p.id as PersonaId)
       )
 
+      // 3. 이번 라운드 누적 응답 (회의 모드: 순서대로 앞선 발언 컨텍스트 제공)
+      const roundResponses: Array<{
+        name: string
+        role: string
+        content: string
+      }> = []
+
       try {
-        // Sequential streaming per persona
         for (const persona of personasToQuery) {
-          await streamPersonaResponse(historyForApi, persona.id as PersonaId)
+          // 앞선 페르소나 응답을 컨텍스트에 주입
+          const apiMessages = injectRoundContext(baseApiMessages, roundResponses)
+
+          const content = await streamPersonaResponse(
+            apiMessages,
+            persona.id as PersonaId
+          )
+
+          if (content && !content.startsWith('⚠️')) {
+            roundResponses.push({
+              name: persona.name,
+              role: persona.role,
+              content,
+            })
+          }
         }
       } finally {
         setIsLoading(false)
+        // 4. 모든 응답 완료 후 localStorage 최종 저장
         setMessages((prev) => {
           saveHistory(prev)
           return prev
@@ -237,26 +300,31 @@ export default function Boardroom() {
   )
 
   function clearHistory() {
-    if (window.confirm('대화 내용을 모두 지우시겠습니까?')) {
+    if (window.confirm('대화 내용을 모두 지우시겠습니까?\n(이 작업은 되돌릴 수 없습니다)')) {
       setMessages([])
       localStorage.removeItem(STORAGE_KEY)
     }
   }
+
+  const msgCount = messages.filter((m) => !m.isStreaming).length
 
   return (
     <div className="flex flex-col h-screen bg-[#f5f2ec] dark:bg-gray-900 transition-colors duration-200">
       {/* Header */}
       <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-lg font-black text-gray-900 dark:text-gray-100 leading-none">
-                Shadowgram Boardroom
-              </h1>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                8유형 글로벌 비즈니스 가상 회의실
-              </p>
-            </div>
+          <div>
+            <h1 className="text-lg font-black text-gray-900 dark:text-gray-100 leading-none">
+              Shadowgram Boardroom
+            </h1>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+              8유형 글로벌 비즈니스 가상 회의실
+              {msgCount > 0 && (
+                <span className="ml-1.5 text-gray-300 dark:text-gray-600">
+                  · 메시지 {msgCount}개
+                </span>
+              )}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -271,15 +339,16 @@ export default function Boardroom() {
 
             <button
               onClick={clearHistory}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              disabled={isLoading || messages.length === 0}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border border-gray-200 dark:border-gray-600"
               title="대화 초기화"
             >
-              🗑
+              🗑 초기화
             </button>
 
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               title={darkMode ? '라이트 모드' : '다크 모드'}
             >
               {darkMode ? '☀️' : '🌙'}
@@ -323,7 +392,7 @@ export default function Boardroom() {
           </div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
             {selectedPersonas.size === PERSONAS.length
-              ? '전체 8명 참여 중'
+              ? '전체 8명 참여 중 — 순서대로 응답하며 앞선 발언을 컨텍스트로 활용합니다'
               : `${selectedPersonas.size}명 선택됨 — 선택된 페르소나만 응답합니다`}
           </p>
         </div>
@@ -338,9 +407,9 @@ export default function Boardroom() {
               <h2 className="text-xl font-bold text-gray-700 dark:text-gray-300">
                 보드룸에 오신 것을 환영합니다
               </h2>
-              <p className="text-gray-400 dark:text-gray-500 max-w-sm mx-auto">
+              <p className="text-gray-400 dark:text-gray-500 max-w-sm mx-auto leading-relaxed">
                 Shadowgram 8유형 페르소나와 함께 글로벌 비즈니스 전략을 논의하세요.
-                아래 빠른 안건을 클릭하거나 직접 안건을 입력하세요.
+                각 페르소나는 이전 발언들을 참고하며 순서대로 응답합니다.
               </p>
               <div className="flex flex-wrap justify-center gap-2 pt-4">
                 {PERSONAS.map((p) => (
