@@ -414,43 +414,42 @@ export default function Boardroom() {
   const msgCount = messages.filter((m) => !m.isStreaming).length
 
   return (
-    <div className="flex flex-col h-screen bg-[#f5f2ec] dark:bg-gray-900 transition-colors duration-200">
+    <div className="flex flex-col h-screen bg-[#f4f1eb] dark:bg-gray-950 transition-colors duration-200">
       {/* Header */}
-      <header className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-lg font-black text-gray-900 dark:text-gray-100 leading-none">
-              Shadowgram Boardroom
-            </h1>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-              8유형 글로벌 비즈니스 가상 회의실
-              {msgCount > 0 && (
-                <span className="ml-1.5 text-gray-300 dark:text-gray-600">
-                  · 메시지 {msgCount}개
-                </span>
-              )}
-            </p>
+      <header className="flex-shrink-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          {/* Logo + title */}
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl leading-none">🏛️</span>
+            <div>
+              <h1 className="text-sm font-black text-gray-900 dark:text-gray-100 leading-none tracking-tight">
+                Shadowgram Boardroom
+              </h1>
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-none">
+                8유형 AI 가상 회의실{msgCount > 0 && ` · ${msgCount}개 메시지`}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Actions */}
+          <div className="flex items-center gap-1.5">
             <DayCounter />
 
             <button
               onClick={toggleMeetingMode}
               disabled={isLoading}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border disabled:opacity-50 disabled:cursor-not-allowed ${
                 meetingMode
-                  ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
+                  ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 border-gray-200 dark:border-gray-700'
               }`}
-              title={meetingMode ? '회의 모드 끄기' : '회의 모드: 8명 전원 순서대로 응답 후 자동 요약'}
             >
               {meetingMode ? '🔴 회의 중' : '🏛️ 회의 모드'}
             </button>
 
             <button
               onClick={() => setShowMinutes(true)}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-200 dark:border-gray-700"
             >
               📋 회의록
             </button>
@@ -458,16 +457,15 @@ export default function Boardroom() {
             <button
               onClick={clearHistory}
               disabled={isLoading || messages.length === 0}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-400 dark:text-gray-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors border border-gray-200 dark:border-gray-600"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="대화 초기화"
             >
-              🗑 초기화
+              🗑️
             </button>
 
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              title={darkMode ? '라이트 모드' : '다크 모드'}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               {darkMode ? '☀️' : '🌙'}
             </button>
@@ -475,19 +473,21 @@ export default function Boardroom() {
         </div>
       </header>
 
-      {/* Persona selector — 회의 모드 중엔 숨김 */}
+      {/* Persona selector bar */}
       {meetingMode ? (
-        <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700">
-          <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-3">
-            <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">🏛️ 회의 모드 활성</span>
-            <span className="text-amber-500 dark:text-amber-500 text-xs">
-              8명 전원이 차례로 짧게 답변 → 마지막에 최적 결론 자동 도출
+        <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900">
+          <div className="max-w-5xl mx-auto px-4 py-2 flex items-center gap-3">
+            <span className="text-amber-600 dark:text-amber-400 font-bold text-xs">🏛️ 회의 모드</span>
+            <span className="text-amber-500 dark:text-amber-600 text-xs hidden sm:block">
+              8명 전원이 순서대로 짧게 답변 → 최적 결론 자동 도출
             </span>
             <div className="flex gap-1 ml-auto">
               {PERSONAS.map((p) => (
                 <div
                   key={p.id}
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white"
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white transition-all ${
+                    activePersonaId === p.id ? 'scale-125 shadow-md' : ''
+                  }`}
                   style={{ backgroundColor: p.color }}
                   title={p.name}
                 >
@@ -498,11 +498,11 @@ export default function Boardroom() {
           </div>
         </div>
       ) : (
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-          <div className="max-w-5xl mx-auto px-4 py-3">
-            <div className="flex items-start gap-4">
-              <div className="flex-1 overflow-x-auto">
-                <div className="flex gap-4 min-w-max pb-1">
+        <div className="flex-shrink-0 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
+          <div className="max-w-5xl mx-auto px-4 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 overflow-x-auto scrollbar-hide">
+                <div className="flex gap-1 min-w-max">
                   {PERSONAS.map((persona) => (
                     <PersonaAvatar
                       key={persona.id}
@@ -515,51 +515,55 @@ export default function Boardroom() {
                   ))}
                 </div>
               </div>
-              <div className="flex-shrink-0 flex flex-col gap-1 pt-0.5">
+              <div className="flex-shrink-0 flex gap-2 border-l border-gray-100 dark:border-gray-800 pl-3">
                 <button
                   onClick={selectAllPersonas}
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
+                  className="text-[10px] font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
                 >
-                  전체 선택
+                  전체
                 </button>
+                <span className="text-gray-200 dark:text-gray-700">|</span>
                 <button
                   onClick={deselectAllPersonas}
-                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
+                  className="text-[10px] font-semibold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
                   해제
                 </button>
               </div>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              {selectedPersonas.size === PERSONAS.length
-                ? '전체 8명 참여 중 — 순서대로 응답하며 앞선 발언을 컨텍스트로 활용합니다'
-                : `${selectedPersonas.size}명 선택됨 — 선택된 페르소나만 응답합니다`}
-            </p>
+            {selectedPersonas.size < PERSONAS.length && (
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 pl-1">
+                {selectedPersonas.size}명 선택됨
+              </p>
+            )}
           </div>
         </div>
       )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+        <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
           {messages.length === 0 ? (
-            <div className="text-center py-16 space-y-4">
-              <div className="text-5xl">🏛️</div>
-              <h2 className="text-xl font-bold text-gray-700 dark:text-gray-300">
-                보드룸에 오신 것을 환영합니다
-              </h2>
-              <p className="text-gray-400 dark:text-gray-500 max-w-sm mx-auto leading-relaxed">
-                Shadowgram 8유형 페르소나와 함께 글로벌 비즈니스 전략을 논의하세요.
-                각 페르소나는 이전 발언들을 참고하며 순서대로 응답합니다.
-              </p>
-              <div className="flex flex-wrap justify-center gap-2 pt-4">
+            <div className="text-center py-20 space-y-5">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white dark:bg-gray-800 shadow-lg text-4xl">
+                🏛️
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
+                  보드룸에 오신 것을 환영합니다
+                </h2>
+                <p className="text-sm text-gray-400 dark:text-gray-500 max-w-sm mx-auto leading-relaxed">
+                  Shadowgram 8유형 페르소나와 함께<br />글로벌 비즈니스 전략을 논의하세요
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 pt-2">
                 {PERSONAS.map((p) => (
                   <span
                     key={p.id}
-                    className="px-2 py-1 rounded-full text-xs font-medium text-white"
-                    style={{ backgroundColor: p.color }}
+                    className="px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+                    style={{ backgroundColor: p.color + 'cc' }}
                   >
-                    {p.name}
+                    {p.icon} {p.name}
                   </span>
                 ))}
               </div>
@@ -574,8 +578,8 @@ export default function Boardroom() {
       </div>
 
       {/* Input area */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 py-3 space-y-3">
+      <div className="flex-shrink-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-100 dark:border-gray-800">
+        <div className="max-w-3xl mx-auto px-4 pt-2 pb-4 space-y-2">
           <QuickActions
             onSelect={(prompt) => setQuickActionPrompt(prompt)}
             disabled={isLoading}

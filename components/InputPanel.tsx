@@ -51,51 +51,64 @@ export default function InputPanel({
     }
   }
 
+  const hasText = text.trim().length > 0
+
   return (
-    <div className="flex gap-3 items-end">
+    <div
+      className={`
+        flex items-end gap-2 rounded-2xl border
+        bg-white dark:bg-gray-800
+        transition-all duration-200
+        ${hasText
+          ? 'border-gray-400 dark:border-gray-500 shadow-md'
+          : 'border-gray-200 dark:border-gray-600 shadow-sm'
+        }
+      `}
+    >
       <textarea
         ref={textareaRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="안건을 입력하세요... (Shift+Enter: 줄바꿈)"
+        placeholder="안건을 입력하세요... (Enter 전송 · Shift+Enter 줄바꿈)"
         rows={1}
         disabled={isLoading}
         className="
-          flex-1 resize-none rounded-xl border border-gray-200 dark:border-gray-600
-          bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100
-          px-4 py-3 text-base leading-relaxed
+          flex-1 resize-none rounded-2xl
+          bg-transparent text-gray-800 dark:text-gray-100
+          px-4 py-3.5 text-sm leading-relaxed
           placeholder:text-gray-400 dark:placeholder:text-gray-500
-          focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500
+          focus:outline-none
           disabled:opacity-60 disabled:cursor-not-allowed
-          transition-all duration-150
-          min-h-[48px] max-h-[160px]
+          min-h-[52px] max-h-[160px]
         "
       />
-      <button
-        onClick={handleSend}
-        disabled={!text.trim() || isLoading}
-        className="
-          flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center
-          bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800
-          hover:bg-gray-700 dark:hover:bg-gray-300
-          disabled:opacity-40 disabled:cursor-not-allowed
-          transition-all duration-150 shadow-sm
-        "
-        aria-label="전송"
-      >
-        {isLoading ? (
-          <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M22 2L11 13" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M22 2L15 22L11 13L2 9L22 2Z" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
+      <div className="flex-shrink-0 p-2">
+        <button
+          onClick={handleSend}
+          disabled={!hasText || isLoading}
+          className={`
+            w-9 h-9 rounded-xl flex items-center justify-center
+            transition-all duration-150
+            ${hasText && !isLoading
+              ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-700 dark:hover:bg-gray-200 shadow-sm'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+            }
+          `}
+          aria-label="전송"
+        >
+          {isLoading ? (
+            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+      </div>
     </div>
   )
 }
