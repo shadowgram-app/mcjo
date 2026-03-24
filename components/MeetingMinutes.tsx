@@ -40,7 +40,7 @@ export default function MeetingMinutes({ messages, onClose }: MeetingMinutesProp
     // 요약 메시지 먼저 찾아서 맨 위에 배치
     const summaryMsg = messages.find((m) => m.isSummary)
     if (summaryMsg) {
-      md += `## 📋 회의 요약\n\n${summaryMsg.content}\n\n---\n\n`
+      md += `## ✅ 최적 결론\n\n${summaryMsg.content}\n\n---\n\n`
     }
 
     md += `## 전체 대화록\n\n`
@@ -121,7 +121,7 @@ export default function MeetingMinutes({ messages, onClose }: MeetingMinutesProp
                 return (
                   <div key={msg.id} className="text-sm rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-900/20 overflow-hidden">
                     <div className="px-3 py-1.5 bg-amber-400 dark:bg-amber-500">
-                      <span className="text-white font-bold text-xs">📋 회의 요약</span>
+                      <span className="text-white font-bold text-xs">✅ 최적 결론</span>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre-wrap line-clamp-6 px-3 py-2">
                       {msg.content}

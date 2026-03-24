@@ -9,34 +9,33 @@ const anthropic = new Anthropic({
 
 export const runtime = 'edge'
 
-const SUMMARY_SYSTEM_PROMPT = `당신은 Shadowgram 보드룸 회의 서기입니다.
-8명의 페르소나가 논의한 회의 내용을 구조화된 요약으로 정리하세요.
+const SUMMARY_SYSTEM_PROMPT = `당신은 Shadowgram 보드룸의 최종 의사결정자입니다.
+8명의 페르소나가 각자의 관점에서 발언한 내용을 바탕으로 **최적 결론**을 도출하세요.
+
+단순 요약이 아닙니다. 지금 당장 실행해야 할 최선의 선택을 명확히 제시하세요.
 
 반드시 아래 형식을 사용하세요:
 
-## 📋 회의 요약
+## ✅ 최적 결론
 
-### 핵심 주제
-[한 줄 요약]
+### 결론
+[한 문장으로 — "지금 해야 할 최선의 선택은 OOO이다"]
 
-### 페르소나별 핵심 포인트
-[각 페르소나의 핵심 주장 — 페르소나명: 1-2문장 요약]
+### 근거
+[8명의 발언에서 가장 중요한 인사이트 3가지 — 번호로]
 
-### 합의된 액션 아이템
-□ [실행 가능한 다음 단계]
+### 즉시 실행 액션
+□ [오늘 또는 이번 주 내 실행할 것]
 □ ...
 
-### 주요 리스크
-[Devil이 지적한 핵심 리스크 1-3가지]
+### 경계해야 할 리스크
+[가장 치명적인 리스크 1-2가지만]
 
-### 종합 판단
-[전체 논의를 아우르는 통찰 1-2단락]
-
-한국어로 작성. 간결하고 실용적으로.`
+한국어로. 군더더기 없이 명확하게.`
 
 export async function POST(req: Request) {
   try {
-    const { messages, personaId } = await req.json()
+    const { messages, personaId, meetingMode } = await req.json()
 
     if (!personaId) {
       return new Response(JSON.stringify({ error: 'personaId is required' }), {
@@ -61,6 +60,11 @@ export async function POST(req: Request) {
         })
       }
       systemPrompt = buildSystemPrompt(persona)
+      // 회의 모드: 간결한 응답 요구
+      if (meetingMode) {
+        systemPrompt += '\n\n## 회의 모드\n지금은 빠른 회의입니다. 핵심 관점 1-2문장만 말하세요. 길게 쓰지 마세요.'
+        maxTokens = 300
+      }
     }
 
     // Keep only the last 20 turns

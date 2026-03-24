@@ -155,7 +155,8 @@ export default function Boardroom() {
   const streamPersonaResponse = useCallback(
     async (
       apiMessages: Array<{ role: string; content: string }>,
-      personaId: PersonaId
+      personaId: PersonaId,
+      isMeetingMode = false
     ): Promise<string> => {
       const msgId = generateId()
       const persona = PERSONAS.find((p) => p.id === personaId)!
@@ -181,7 +182,7 @@ export default function Boardroom() {
         const res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: apiMessages, personaId }),
+          body: JSON.stringify({ messages: apiMessages, personaId, meetingMode: isMeetingMode }),
         })
 
         if (!res.ok || !res.body) {
@@ -259,7 +260,7 @@ export default function Boardroom() {
           id: msgId,
           role: 'assistant' as const,
           content: '',
-          personaName: '회의 요약',
+          personaName: '최적 결론',
           timestamp: Date.now(),
           isStreaming: true,
           isSummary: true,
@@ -375,7 +376,8 @@ export default function Boardroom() {
 
           const content = await streamPersonaResponse(
             apiMessages,
-            persona.id as PersonaId
+            persona.id as PersonaId,
+            meetingMode
           )
 
           if (content && !content.startsWith('⚠️')) {
@@ -473,48 +475,69 @@ export default function Boardroom() {
         </div>
       </header>
 
-      {/* Persona selector */}
-      <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-start gap-4">
-            <div className="flex-1 overflow-x-auto">
-              <div className="flex gap-4 min-w-max pb-1">
-                {PERSONAS.map((persona) => (
-                  <PersonaAvatar
-                    key={persona.id}
-                    persona={persona}
-                    isSelected={selectedPersonas.has(persona.id as PersonaId)}
-                    isActive={activePersonaId === persona.id}
-                    onToggle={togglePersona}
-                    size="sm"
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex-shrink-0 flex flex-col gap-1 pt-0.5">
-              <button
-                onClick={selectAllPersonas}
-                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
-              >
-                전체 선택
-              </button>
-              <button
-                onClick={deselectAllPersonas}
-                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
-              >
-                해제
-              </button>
+      {/* Persona selector — 회의 모드 중엔 숨김 */}
+      {meetingMode ? (
+        <div className="flex-shrink-0 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700">
+          <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-3">
+            <span className="text-amber-600 dark:text-amber-400 font-bold text-sm">🏛️ 회의 모드 활성</span>
+            <span className="text-amber-500 dark:text-amber-500 text-xs">
+              8명 전원이 차례로 짧게 답변 → 마지막에 최적 결론 자동 도출
+            </span>
+            <div className="flex gap-1 ml-auto">
+              {PERSONAS.map((p) => (
+                <div
+                  key={p.id}
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black text-white"
+                  style={{ backgroundColor: p.color }}
+                  title={p.name}
+                >
+                  {p.icon}
+                </div>
+              ))}
             </div>
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-            {meetingMode
-              ? '🏛️ 회의 모드 — 8명 전원 순서대로 응답 후 회의 요약이 자동 생성됩니다'
-              : selectedPersonas.size === PERSONAS.length
-              ? '전체 8명 참여 중 — 순서대로 응답하며 앞선 발언을 컨텍스트로 활용합니다'
-              : `${selectedPersonas.size}명 선택됨 — 선택된 페르소나만 응답합니다`}
-          </p>
         </div>
-      </div>
+      ) : (
+        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+          <div className="max-w-5xl mx-auto px-4 py-3">
+            <div className="flex items-start gap-4">
+              <div className="flex-1 overflow-x-auto">
+                <div className="flex gap-4 min-w-max pb-1">
+                  {PERSONAS.map((persona) => (
+                    <PersonaAvatar
+                      key={persona.id}
+                      persona={persona}
+                      isSelected={selectedPersonas.has(persona.id as PersonaId)}
+                      isActive={activePersonaId === persona.id}
+                      onToggle={togglePersona}
+                      size="sm"
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex-shrink-0 flex flex-col gap-1 pt-0.5">
+                <button
+                  onClick={selectAllPersonas}
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
+                >
+                  전체 선택
+                </button>
+                <button
+                  onClick={deselectAllPersonas}
+                  className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors whitespace-nowrap"
+                >
+                  해제
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              {selectedPersonas.size === PERSONAS.length
+                ? '전체 8명 참여 중 — 순서대로 응답하며 앞선 발언을 컨텍스트로 활용합니다'
+                : `${selectedPersonas.size}명 선택됨 — 선택된 페르소나만 응답합니다`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">

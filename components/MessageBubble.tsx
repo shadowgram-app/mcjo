@@ -58,7 +58,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           <div className="flex items-center justify-between px-4 py-2.5 bg-amber-400 dark:bg-amber-500">
             <div className="flex items-center gap-2">
               <span className="text-white font-black text-base">📋</span>
-              <span className="text-white font-bold text-sm">회의 요약</span>
+              <span className="text-white font-bold text-sm">최적 결론</span>
             </div>
             <span className="text-amber-100 text-xs">{formatTime(message.timestamp)}</span>
           </div>
